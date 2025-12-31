@@ -82,15 +82,32 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	dst.Seek(0, io.SeekStart)
 
+	aspectRatio, err := getVideoAspectRatio(dst.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't find aspect ratio", err)
+		return
+	}
+
+	key := assetPath
+	if aspectRatio == "16:9" {
+		key = "landscape/" + assetPath
+	} else if aspectRatio == "9:16"{
+		key = "portrait/" + assetPath
+	} else {
+		key = "other/" + assetPath
+	}
+
 	inputParams := s3.PutObjectInput{
 		Bucket: &cfg.s3Bucket,
-		Key: &assetPath,
+		Key: &key,
 		Body: dst,
 		ContentType: &mediaType,
 	}
+
+
 	cfg.s3Client.PutObject(context.Background(), &inputParams)
 
-	url := fmt.Sprintf("http://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, assetPath)
+	url := fmt.Sprintf("http://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
 	video.VideoURL = &url
 
 	err = cfg.db.UpdateVideo(video)
